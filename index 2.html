@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="RUST OBFUSCATOR v4.0 — 高度文字列難読化エンジン">
+<title>RUST OBFUSCATOR v4.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════
+   RESET & ROOT
+═══════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --r:#C93B24;--rb:#E84A30;--ro:#FF6B47;
+  --gold:#D4920A;--goldb:#F0AA20;
+  --green:#27A85A;--blue:#3278C0;
+  --bg:#070707;--bg1:#0C0C0C;--bg2:#111;--bg3:#161616;--bg4:#1C1C1C;
+  --b0:#1A1A1A;--b1:#222;--b2:#2C2C2C;--b3:#383838;
+  --t0:#EEE6D6;--t1:#B0A898;--t2:#706860;--t3:#403830;
+  --mono:'JetBrains Mono',monospace;
+  --dsp:'Orbitron',sans-serif;
+  --glow:0 0 18px rgba(201,59,36,.5);
+  --tr:all .15s ease;
+}
+html{background:var(--bg);scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--t0);
+  font-family:var(--mono);font-size:13px;line-height:1.55;
+  min-height:100vh;overflow-x:hidden;
+}
+
+/* ═══════════════════════════════════════
+   BACKGROUND FX
+═══════════════════════════════════════ */
+#bg-grid{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(201,59,36,.028)1px,transparent 1px),
+    linear-gradient(90deg,rgba(201,59,36,.028)1px,transparent 1px);
+  background-size:30px 30px;
+}
+#bg-grad{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse 90% 50% at 50% -5%,rgba(201,59,36,.07),transparent 70%);
+}
+#scanline{
+  position:fixed;inset:0;pointer-events:none;z-index:999;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.018) 3px,rgba(0,0,0,.018) 4px);
+}
+
+/* ═══════════════════════════════════════
+   SHELL
+═══════════════════════════════════════ */
+#shell{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;max-width:920px;margin:0 auto}
+
+/* ═══════════════════════════════════════
+   HEADER
+═══════════════════════════════════════ */
+header{
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--b1);
+  background:linear-gradient(180deg,rgba(201,59,36,.08)0%,transparent 100%);
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.hdr-l{display:flex;align-items:center;gap:12px}
+.hex-logo{
+  width:34px;height:34px;background:var(--rb);flex-shrink:0;
+  clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--dsp);font-size:12px;font-weight:900;color:#fff;
+  animation:hpulse 4s ease-in-out infinite;
+}
+@keyframes hpulse{0%,100%{filter:drop-shadow(0 0 0 transparent)}50%{filter:drop-shadow(0 0 10px rgba(232,74,48,.9))}}
+.hdr-title{font-family:var(--dsp);font-size:clamp(13px,3.8vw,20px);font-weight:900;letter-spacing:2px;color:var(--rb);line-height:1.1}
+.hdr-sub{font-size:9px;color:var(--t3);letter-spacing:2.5px;text-transform:uppercase;margin-top:2px}
+.hdr-r{display:flex;align-items:center;gap:8px}
+.ver-chip{font-family:var(--dsp);font-size:8px;letter-spacing:1px;color:var(--rb);border:1px solid rgba(201,59,36,.35);padding:3px 8px;background:rgba(201,59,36,.07)}
+.pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pd 2.4s ease-in-out infinite}
+@keyframes pd{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ═══════════════════════════════════════
+   NAV TABS
+═══════════════════════════════════════ */
+nav{display:flex;border-bottom:1px solid var(--b1);background:var(--bg1);overflow-x:auto;-webkit-overflow-scrolling:touch}
+nav::-webkit-scrollbar{height:2px}
+nav::-webkit-scrollbar-thumb{background:var(--rb)}
+.ntab{
+  flex:1;min-width:60px;padding:11px 6px;
+  font-family:var(--dsp);font-size:8px;letter-spacing:1.5px;font-weight:700;
+  text-transform:uppercase;border:none;cursor:pointer;
+  background:transparent;color:var(--t3);border-bottom:2px solid transparent;
+  transition:var(--tr);white-space:nowrap;
+}
+.ntab.on{color:var(--rb);border-bottom-color:var(--rb);background:rgba(201,59,36,.04)}
+.ntab:hover:not(.on){color:var(--t1)}
+
+/* ═══════════════════════════════════════
+   MAIN CONTENT
+═══════════════════════════════════════ */
+main{flex:1;padding:14px;display:flex;flex-direction:column;gap:13px}
+
+/* tab panels */
+.panel{display:none;flex-direction:column;gap:13px}
+.panel.on{display:flex}
+
+/* ═══════════════════════════════════════
+   SECTION LABEL
+═══════════════════════════════════════ */
+.sl{
+  font-size:8px;letter-spacing:3px;text-transform:uppercase;color:var(--t3);
+  margin-bottom:5px;display:flex;align-items:center;gap:7px;
+}
+.sl::after{content:'';flex:1;height:1px;background:var(--b1)}
+.chip{font-size:7px;padding:1px 5px;letter-spacing:1px;border:1px solid;white-space:nowrap}
+.chip-r{color:var(--rb);border-color:rgba(201,59,36,.4);background:rgba(201,59,36,.1)}
+.chip-g{color:var(--goldb);border-color:rgba(212,146,10,.4);background:rgba(212,146,10,.1)}
+.chip-b{color:#60A8F0;border-color:rgba(50,120,192,.4);background:rgba(50,120,192,.1)}
+.chip-gr{color:var(--green);border-color:rgba(39,168,90,.4);background:rgba(39,168,90,.08)}
+
+/* ═══════════════════════════════════════
+   MODE TOGGLE
+═══════════════════════════════════════ */
+.mode-row{display:flex;background:var(--bg2);border:1px solid var(--b1)}
+.mbtn{
+  flex:1;padding:10px;
+  font-family:var(--dsp);font-size:8px;letter-spacing:2px;font-weight:700;
+  text-transform:uppercase;border:none;cursor:pointer;
+  background:transparent;color:var(--t3);transition:var(--tr);
+}
+.mbtn:hover:not(.mbtn-on){color:var(--t1)}
+.mbtn-encode.mbtn-on{background:var(--rb);color:#fff}
+.mbtn-decode.mbtn-on{background:var(--blue);color:#fff}
+
+/* ═══════════════════════════════════════
+   METHOD GRID
+═══════════════════════════════════════ */
+.cat-lbl{font-size:8px;color:var(--t3);letter-spacing:2px;text-transform:uppercase;margin:8px 0 4px 1px}
+.mgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+@media(max-width:520px){.mgrid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:340px){.mgrid{grid-template-columns:repeat(2,1fr)}}
+.mcard{
+  background:var(--bg2);border:1px solid var(--b1);color:var(--t2);
+  font-family:var(--mono);font-size:9px;padding:7px 4px 6px;cursor:pointer;
+  transition:var(--tr);text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  user-select:none;-webkit-user-select:none;
+}
+.mcard:hover{border-color:var(--rb);color:var(--t0)}
+.mcard.sel{background:rgba(201,59,36,.1);border-color:var(--rb);color:var(--rb);box-shadow:var(--glow)}
+.mcard.inchain{background:rgba(212,146,10,.08);border-color:var(--goldb);color:var(--goldb)}
+.mcard.oneway{opacity:.65}
+.sdots{display:flex;gap:2px;margin-top:2px}
+.sd{width:3px;height:3px;border-radius:50%;background:var(--b2)}
+.sd.on{background:var(--rb)}
+.sd.on.g{background:var(--goldb)}
+
+/* ═══════════════════════════════════════
+   CHAIN STRIP
+═══════════════════════════════════════ */
+.chain-strip{
+  display:flex;flex-wrap:wrap;gap:5px;padding:8px;
+  background:var(--bg2);border:1px solid var(--b1);
+  min-height:38px;align-items:center;
+}
+.cnode{
+  display:inline-flex;align-items:center;gap:4px;
+  background:rgba(212,146,10,.09);border:1px solid rgba(212,146,10,.4);
+  color:var(--goldb);font-size:9px;padding:3px 7px;
+}
+.carr{color:var(--t3);font-size:9px}
+.crm{background:none;border:none;color:var(--t3);cursor:pointer;font-size:11px;padding:0 0 0 2px;line-height:1}
+.crm:hover{color:var(--rb)}
+.cmt-empty{color:var(--t3);font-size:10px;font-style:italic}
+
+/* ═══════════════════════════════════════
+   KEY INPUT
+═══════════════════════════════════════ */
+.key-row{display:flex;align-items:flex-start;gap:8px}
+.key-lbl{font-size:8px;color:var(--t3);letter-spacing:2px;padding-top:9px;white-space:nowrap;flex-shrink:0}
+.key-col{flex:1;min-width:0}
+.key-in{
+  width:100%;background:var(--bg2);border:1px solid var(--b1);color:var(--t0);
+  font-family:var(--mono);font-size:12px;padding:7px 10px;outline:none;
+  transition:border-color .2s;
+}
+.key-in:focus{border-color:rgba(201,59,36,.55);box-shadow:0 0 0 1px rgba(201,59,36,.12)}
+.key-bar{height:2px;background:var(--b1);margin-top:3px}
+.key-fill{height:100%;transition:width .3s,background .3s}
+.key-hint{font-size:8px;color:var(--t3);margin-top:3px}
+
+/* ═══════════════════════════════════════
+   FILE IO
+═══════════════════════════════════════ */
+.file-row{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}
+.file-drop{
+  flex:1;min-width:120px;border:1px dashed var(--b2);background:var(--bg2);
+  padding:10px 12px;cursor:pointer;transition:var(--tr);
+  text-align:center;color:var(--t2);font-size:10px;
+}
+.file-drop:hover,.file-drop.drag{border-color:var(--rb);color:var(--t0);background:rgba(201,59,36,.04)}
+.file-name{font-size:8px;color:var(--t2);margin-top:3px;letter-spacing:1px}
+
+/* ═══════════════════════════════════════
+   TEXTAREA
+═══════════════════════════════════════ */
+.ta-wrap{position:relative}
+textarea{
+  width:100%;background:var(--bg2);border:1px solid var(--b1);color:var(--t0);
+  font-family:var(--mono);font-size:11px;line-height:1.65;
+  padding:10px 10px 24px;resize:vertical;min-height:95px;
+  outline:none;transition:border-color .2s;-webkit-appearance:none;
+}
+textarea:focus{border-color:rgba(201,59,36,.5);box-shadow:0 0 0 1px rgba(201,59,36,.1)}
+textarea::placeholder{color:var(--t3)}
+.ccount{position:absolute;bottom:7px;right:9px;font-size:8px;color:var(--t3);pointer-events:none}
+
+/* ═══════════════════════════════════════
+   SCORE PANEL
+═══════════════════════════════════════ */
+.score-panel{
+  background:var(--bg2);border:1px solid var(--b1);
+  padding:11px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.score-num{font-family:var(--dsp);font-size:26px;font-weight:900;line-height:1}
+.score-den{font-size:10px;color:var(--t2)}
+.score-lbl{font-family:var(--dsp);font-size:8px;font-weight:700;letter-spacing:2px;padding:2px 7px;border:1px solid}
+.score-rhs{flex:1;min-width:60px}
+.sbar-bg{height:4px;background:var(--b1);overflow:hidden}
+.sbar-fill{height:100%;transition:width .5s cubic-bezier(.34,1.2,.64,1),background .5s}
+.score-desc{font-size:8px;color:var(--t3);letter-spacing:2px;text-transform:uppercase;margin-top:3px}
+
+/* ═══════════════════════════════════════
+   OUTPUT BOX
+═══════════════════════════════════════ */
+.out-box{
+  background:var(--bg2);border:1px solid var(--b1);border-left:2px solid var(--rb);
+  padding:10px 11px;font-family:var(--mono);font-size:11px;line-height:1.7;
+  word-break:break-all;min-height:64px;color:var(--rb);
+  white-space:pre-wrap;position:relative;
+}
+.out-box.empty{color:var(--t3);border-left-color:var(--b2)}
+.out-box.proc{
+  color:var(--t3);font-style:italic;
+  background:repeating-linear-gradient(90deg,var(--bg2)0,var(--bg2)20px,rgba(201,59,36,.04)20px,rgba(201,59,36,.04)40px);
+  background-size:200% 100%;animation:shim 1.2s linear infinite;
+}
+@keyframes shim{0%{background-position:0}100%{background-position:-200%}}
+
+/* ═══════════════════════════════════════
+   STATS
+═══════════════════════════════════════ */
+.stats{display:flex;gap:14px;font-size:8px;color:var(--t3);letter-spacing:1px;flex-wrap:wrap}
+.sv{color:var(--rb)}
+
+/* ═══════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════ */
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{
+  padding:10px 12px;font-family:var(--dsp);font-size:8px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;
+  transition:var(--tr);position:relative;overflow:hidden;white-space:nowrap;
+}
+.btn::after{content:'';position:absolute;inset:0;background:rgba(255,255,255,.07);transform:translateX(-101%);transition:transform .2s}
+.btn:hover::after{transform:translateX(0)}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+.btn-p{background:var(--rb);color:#fff;flex:2}
+.btn-p:hover:not(:disabled){background:var(--ro)}
+.btn-p:active:not(:disabled){transform:scale(.98)}
+.btn-s{background:var(--bg3);color:var(--t2);border:1px solid var(--b1);flex:1}
+.btn-s:hover{color:var(--t0);border-color:var(--rb)}
+.btn-g{background:transparent;color:var(--t2);border:1px solid var(--b1);font-family:var(--mono);font-size:9px;letter-spacing:.5px;flex:1}
+.btn-g:hover{color:var(--rb);border-color:var(--rb)}
+.btn-sm{flex:none!important;padding:5px 9px;font-size:7px}
+.btn-blue{background:rgba(50,120,192,.15);color:#60A8F0;border:1px solid rgba(50,120,192,.3)}
+.btn-blue:hover{background:rgba(50,120,192,.25);border-color:#60A8F0}
+
+/* ═══════════════════════════════════════
+   CODE PANEL
+═══════════════════════════════════════ */
+.code-box{
+  background:#090909;border:1px solid var(--b1);border-left:2px solid #3278C0;
+  padding:13px;font-family:var(--mono);font-size:10px;line-height:1.7;
+  color:#90C0F0;white-space:pre;overflow-x:auto;max-height:320px;overflow-y:auto;
+}
+.lang-row{display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap}
+.lang-btn{
+  background:var(--bg2);border:1px solid var(--b1);color:var(--t2);
+  font-family:var(--mono);font-size:9px;padding:5px 11px;cursor:pointer;transition:var(--tr);
+}
+.lang-btn.on{background:rgba(50,120,192,.15);border-color:#3278C0;color:#60A8F0}
+.lang-btn:hover:not(.on){color:var(--t0)}
+
+/* ═══════════════════════════════════════
+   CUSTOM BUILDER
+═══════════════════════════════════════ */
+.op-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px}
+@media(max-width:400px){.op-grid{grid-template-columns:repeat(2,1fr)}}
+.op-btn{
+  background:var(--bg2);border:1px solid var(--b1);color:var(--t2);
+  font-family:var(--mono);font-size:9px;padding:6px 4px;cursor:pointer;
+  transition:var(--tr);text-align:center;
+}
+.op-btn:hover{border-color:var(--goldb);color:var(--goldb)}
+.csteps{display:flex;flex-direction:column;gap:4px;min-height:32px}
+.cstep{
+  display:flex;align-items:center;gap:6px;
+  background:var(--bg3);border:1px solid var(--b1);padding:5px 8px;
+}
+.cstep-lbl{color:var(--goldb);font-size:9px;flex:1}
+.cstep-in{
+  background:var(--bg2);border:1px solid var(--b1);color:var(--t0);
+  font-family:var(--mono);font-size:9px;padding:3px 6px;outline:none;width:80px;
+}
+.cstep-in:focus{border-color:rgba(212,146,10,.5)}
+.cstep-mv,.cstep-rm{background:none;border:none;color:var(--t3);cursor:pointer;font-size:11px;line-height:1;padding:0 2px}
+.cstep-mv:hover{color:var(--t1)}
+.cstep-rm:hover{color:var(--rb)}
+
+/* ═══════════════════════════════════════
+   HISTORY
+═══════════════════════════════════════ */
+.hist-list{display:flex;flex-direction:column;gap:4px;max-height:240px;overflow-y:auto}
+.hist-list::-webkit-scrollbar{width:3px}
+.hist-list::-webkit-scrollbar-thumb{background:var(--rb)}
+.hist-item{
+  background:var(--bg2);border:1px solid var(--b1);
+  padding:8px 10px;cursor:pointer;transition:border-color .15s;
+  display:flex;align-items:center;gap:9px;
+}
+.hist-item:hover{border-color:var(--rb)}
+.hist-meta{flex:1;min-width:0}
+.hist-method{font-size:9px;color:var(--rb);letter-spacing:1px;margin-bottom:2px}
+.hist-prev{font-size:9px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hist-time{font-size:8px;color:var(--t3);white-space:nowrap}
+
+/* ═══════════════════════════════════════
+   DEPLOY GUIDE
+═══════════════════════════════════════ */
+.deploy-card{background:var(--bg2);border:1px solid var(--b1);padding:14px}
+.deploy-title{font-family:var(--dsp);font-size:10px;letter-spacing:2px;color:var(--rb);margin-bottom:10px}
+.deploy-step{display:flex;gap:10px;margin-bottom:10px;align-items:flex-start}
+.step-num{
+  width:22px;height:22px;border-radius:50%;background:rgba(201,59,36,.15);
+  border:1px solid rgba(201,59,36,.4);color:var(--rb);
+  font-family:var(--dsp);font-size:9px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.step-body{font-size:10px;color:var(--t1);line-height:1.7}
+.step-body b{color:var(--t0)}
+.step-code{
+  display:block;margin-top:5px;background:#050505;
+  border:1px solid var(--b1);border-left:2px solid var(--rb);
+  color:#90C0F0;font-size:10px;padding:6px 9px;white-space:pre;overflow-x:auto;
+}
+.deploy-note{font-size:9px;color:var(--t3);margin-top:4px;font-style:italic}
+
+/* ═══════════════════════════════════════
+   MISC
+═══════════════════════════════════════ */
+.divider{height:1px;background:var(--b1)}
+.note{font-size:8px;color:var(--t3);font-style:italic;margin-top:3px}
+.empty-msg{color:var(--t3);font-size:10px;font-style:italic}
+
+/* ═══════════════════════════════════════
+   TOAST
+═══════════════════════════════════════ */
+#toast{
+  position:fixed;bottom:20px;left:50%;
+  transform:translateX(-50%) translateY(80px);
+  background:var(--rb);color:#fff;font-family:var(--dsp);
+  font-size:9px;letter-spacing:2px;padding:9px 22px;
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1);z-index:1000;pointer-events:none;
+}
+#toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ═══════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════ */
+footer{
+  border-top:1px solid var(--b1);padding:10px 20px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;
+  font-size:8px;color:var(--t3);letter-spacing:1px;
+}
+footer a{color:var(--rb);text-decoration:none}
+footer a:hover{color:var(--ro)}
+
+/* scrollbar global */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--b2)}
+::-webkit-scrollbar-thumb:hover{background:var(--rb)}
+</style>
+</head>
+<body>
+<div id="bg-grid"></div>
+<div id="bg-grad"></div>
+<div id="scanline"></div>
+
+<div id="shell">
+
+<!-- ══ HEADER ══ -->
+<header>
+  <div class="hdr-l">
+    <div class="hex-logo">R</div>
+    <div>
+      <div class="hdr-title">RUST OBFUSCATOR</div>
+      <div class="hdr-sub">高度難読化エンジン &nbsp;//&nbsp; Advanced Obfuscation Engine</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <div class="pulse-dot"></div>
+    <span class="ver-chip">v4.0</span>
+  </div>
+</header>
+
+<!-- ══ NAV ══ -->
+<nav>
+  <button class="ntab on" data-tab="single">単体</button>
+  <button class="ntab" data-tab="chain">⛓ チェーン</button>
+  <button class="ntab" data-tab="custom">🔧 カスタム</button>
+  <button class="ntab" data-tab="code">&lt;/&gt; コード</button>
+  <button class="ntab" data-tab="history">📋 履歴</button>
+  <button class="ntab" data-tab="deploy">🚀 公開</button>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<main>
+
+<!-- ─ SINGLE ─ -->
+<div class="panel on" id="panel-single">
+  <!-- mode -->
+  <div>
+    <div class="sl">モード</div>
+    <div class="mode-row">
+      <button class="mbtn mbtn-encode mbtn-on" id="enc-btn-s">▶ エンコード</button>
+      <button class="mbtn mbtn-decode" id="dec-btn-s">◀ デコード</button>
+    </div>
+  </div>
+  <!-- methods -->
+  <div id="methods-single"></div>
+  <!-- key -->
+  <div id="key-area-s" style="display:none">
+    <div class="sl">暗号化キー</div>
+    <div class="key-row">
+      <span class="key-lbl">KEY:</span>
+      <div class="key-col">
+        <input class="key-in" id="key-s" value="rust" placeholder="キーを入力..." spellcheck="false" autocomplete="off">
+        <div class="key-bar"><div class="key-fill" id="kbar-s"></div></div>
+        <div class="key-hint" id="khint-s"></div>
+      </div>
+    </div>
+  </div>
+  <!-- file -->
+  <div>
+    <div class="sl">ファイル入力</div>
+    <div class="file-row">
+      <div class="file-drop" id="fdrop-s">📂 ドロップ or クリック<div class="file-name" id="fname-s"></div></div>
+      <input type="file" id="finput-s" accept=".txt,.md,.csv,.log,.json" style="display:none">
+      <button class="btn btn-g" id="save-s" style="display:none;flex:none">💾 保存</button>
+    </div>
+  </div>
+  <!-- input -->
+  <div>
+    <div class="sl">入力</div>
+    <div class="ta-wrap">
+      <textarea id="input-s" placeholder="テキストを入力してください..." spellcheck="false"></textarea>
+      <span class="ccount" id="cc-s">0 chars</span>
+    </div>
+  </div>
+  <!-- score -->
+  <div>
+    <div class="sl">難読化強度スコア</div>
+    <div class="score-panel">
+      <div style="display:flex;align-items:baseline;gap:4px">
+        <span class="score-num" id="snum-s">0</span>
+        <span class="score-den">/10</span>
+      </div>
+      <span class="score-lbl" id="slbl-s">LOW</span>
+      <div class="score-rhs">
+        <div class="sbar-bg"><div class="sbar-fill" id="sbar-s"></div></div>
+        <div class="score-desc" id="sdesc-s"></div>
+      </div>
+    </div>
+    <div class="note" id="sha-note-s" style="display:none">⚠ ハッシュ関数 — 一方向、デコード不可</div>
+  </div>
+  <!-- actions -->
+  <div class="btn-row">
+    <button class="btn btn-p" id="run-s">▶ エンコード</button>
+    <button class="btn btn-s" id="clear-s">クリア</button>
+  </div>
+  <!-- output -->
+  <div>
+    <div class="sl">出力</div>
+    <div class="out-box empty" id="out-s">結果がここに表示されます...</div>
+  </div>
+  <div class="stats" id="stats-s" style="display:none"></div>
+  <div class="btn-row" id="out-actions-s" style="display:none">
+    <button class="btn btn-g" id="copy-s">📋 コピー</button>
+    <button class="btn btn-g" id="swap-s">⇅ 出力→入力</button>
+  </div>
+</div>
+
+<!-- ─ CHAIN ─ -->
+<div class="panel" id="panel-chain">
+  <div>
+    <div class="sl">モード</div>
+    <div class="mode-row">
+      <button class="mbtn mbtn-encode mbtn-on" id="enc-btn-c">▶ エンコード</button>
+      <button class="mbtn mbtn-decode" id="dec-btn-c">◀ デコード</button>
+    </div>
+  </div>
+  <div id="methods-chain"></div>
+  <div>
+    <div class="sl">チェーン順序 <span class="chip chip-g" id="chain-count">0/10</span></div>
+    <div class="chain-strip" id="chain-strip"><span class="cmt-empty">↑ 手法をクリックして追加</span></div>
+    <div style="margin-top:5px">
+      <button class="btn btn-g btn-sm" id="chain-clear">チェーンクリア</button>
+    </div>
+  </div>
+  <div id="key-area-c" style="display:none">
+    <div class="sl">暗号化キー</div>
+    <div class="key-row">
+      <span class="key-lbl">KEY:</span>
+      <div class="key-col">
+        <input class="key-in" id="key-c" value="rust" placeholder="キーを入力..." spellcheck="false" autocomplete="off">
+        <div class="key-bar"><div class="key-fill" id="kbar-c"></div></div>
+        <div class="key-hint" id="khint-c"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="sl">ファイル入力</div>
+    <div class="file-row">
+      <div class="file-drop" id="fdrop-c">📂 ドロップ or クリック<div class="file-name" id="fname-c"></div></div>
+      <input type="file" id="finput-c" accept=".txt,.md,.csv,.log,.json" style="display:none">
+      <button class="btn btn-g" id="save-c" style="display:none;flex:none">💾 保存</button>
+    </div>
+  </div>
+  <div>
+    <div class="sl">入力</div>
+    <div class="ta-wrap">
+      <textarea id="input-c" placeholder="テキストを入力..." spellcheck="false"></textarea>
+      <span class="ccount" id="cc-c">0 chars</span>
+    </div>
+  </div>
+  <div>
+    <div class="sl">難読化強度スコア</div>
+    <div class="score-panel">
+      <div style="display:flex;align-items:baseline;gap:4px">
+        <span class="score-num" id="snum-c">0</span>
+        <span class="score-den">/10</span>
+      </div>
+      <span class="score-lbl" id="slbl-c">LOW</span>
+      <div class="score-rhs">
+        <div class="sbar-bg"><div class="sbar-fill" id="sbar-c"></div></div>
+        <div class="score-desc" id="sdesc-c"></div>
+      </div>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-p" id="run-c">▶ エンコード</button>
+    <button class="btn btn-s" id="clear-c">クリア</button>
+  </div>
+  <div>
+    <div class="sl">出力</div>
+    <div class="out-box empty" id="out-c">結果がここに表示されます...</div>
+  </div>
+  <div class="stats" id="stats-c" style="display:none"></div>
+  <div class="btn-row" id="out-actions-c" style="display:none">
+    <button class="btn btn-g" id="copy-c">📋 コピー</button>
+    <button class="btn btn-g" id="swap-c">⇅ 出力→入力</button>
+  </div>
+</div>
+
+<!-- ─ CUSTOM ─ -->
+<div class="panel" id="panel-custom">
+  <div>
+    <div class="sl">オペレーション <span class="chip chip-g">クリックで追加</span></div>
+    <div class="op-grid" id="op-grid"></div>
+  </div>
+  <div>
+    <div class="sl">ステップ順序 <span class="chip chip-r" id="cstep-count">0 steps</span></div>
+    <div class="csteps" id="csteps-wrap"><span class="empty-msg">↑ オペレーションを選択して追加</span></div>
+  </div>
+  <div>
+    <div class="sl">ファイル入力</div>
+    <div class="file-row">
+      <div class="file-drop" id="fdrop-u">📂 ドロップ or クリック<div class="file-name" id="fname-u"></div></div>
+      <input type="file" id="finput-u" accept=".txt,.md,.csv,.log,.json" style="display:none">
+      <button class="btn btn-g" id="save-u" style="display:none;flex:none">💾 保存</button>
+    </div>
+  </div>
+  <div>
+    <div class="sl">入力</div>
+    <div class="ta-wrap">
+      <textarea id="input-u" placeholder="テキストを入力..." spellcheck="false"></textarea>
+      <span class="ccount" id="cc-u">0 chars</span>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-p" id="run-u">▶ 実行</button>
+    <button class="btn btn-s" id="clear-u">クリア</button>
+  </div>
+  <div>
+    <div class="sl">出力</div>
+    <div class="out-box empty" id="out-u">結果がここに表示されます...</div>
+  </div>
+  <div class="stats" id="stats-u" style="display:none"></div>
+  <div class="btn-row" id="out-actions-u" style="display:none">
+    <button class="btn btn-g" id="copy-u">📋 コピー</button>
+  </div>
+</div>
+
+<!-- ─ CODE ─ -->
+<div class="panel" id="panel-code">
+  <div>
+    <div class="sl">コード生成 <span class="chip chip-b">単体/チェーンの設定を反映</span></div>
+    <div class="lang-row">
+      <button class="lang-btn on" data-lang="js">JavaScript</button>
+      <button class="lang-btn" data-lang="python">Python</button>
+      <button class="lang-btn" data-lang="rust">Rust</button>
+      <button class="lang-btn" data-lang="go">Go</button>
+    </div>
+    <pre class="code-box" id="code-box"></pre>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" id="copy-code">📋 コードをコピー</button>
+      <button class="btn btn-blue btn-sm" id="dl-code">💾 .txt でダウンロード</button>
+    </div>
+    <div class="note" style="margin-top:6px">※ 単体/チェーンタブで手法を選択後、このタブで確認してください</div>
+  </div>
+</div>
+
+<!-- ─ HISTORY ─ -->
+<div class="panel" id="panel-history">
+  <div class="sl">変換履歴 <span class="chip chip-r" id="hist-count">0 件</span></div>
+  <div class="hist-list" id="hist-list"><span class="empty-msg">変換を実行すると履歴が記録されます</span></div>
+  <div style="margin-top:6px">
+    <button class="btn btn-g btn-sm" id="hist-clear">履歴クリア</button>
+  </div>
+</div>
+
+<!-- ─ DEPLOY ─ -->
+<div class="panel" id="panel-deploy">
+  <div class="sl">GitHub Pages 公開ガイド <span class="chip chip-gr">STATIC HTML</span></div>
+
+  <div class="deploy-card">
+    <div class="deploy-title">🚀 このファイル1つで公開できます</div>
+
+    <div class="deploy-step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <b>GitHubで新しいリポジトリを作成</b><br>
+        github.com → New repository<br>
+        名前例: <code>rust-obfuscator</code> / Public を選択
+      </div>
+    </div>
+
+    <div class="deploy-step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <b>このファイルをアップロード</b><br>
+        ダウンロードした <code>index.html</code> をリポジトリの <code>main</code> ブランチのルートに配置<br>
+        <code class="step-code">リポジトリ → Add file → Upload files → index.html をドロップ</code>
+      </div>
+    </div>
+
+    <div class="deploy-step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <b>GitHub Pages を有効化</b><br>
+        <code class="step-code">Settings → Pages → Source: Deploy from a branch
+Branch: main / (root) → Save</code>
+        数分後に公開されます
+      </div>
+    </div>
+
+    <div class="deploy-step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <b>公開URLでアクセス</b><br>
+        <code class="step-code">https://&lt;あなたのユーザー名&gt;.github.io/&lt;リポジトリ名&gt;/</code>
+      </div>
+    </div>
+
+    <div class="deploy-note">
+      ✓ 外部依存: Google Fonts のみ（オフライン環境では代替フォントで動作）<br>
+      ✓ ビルド不要・npm 不要・サーバー不要<br>
+      ✓ AES-GCM は HTTPS 環境（GitHub Pages）で正常動作します
+    </div>
+  </div>
+
+  <div class="deploy-card" style="margin-top:0">
+    <div class="deploy-title">⚡ Git CLI でデプロイ</div>
+    <pre class="step-code">git init
+git add index.html
+git commit -m "feat: RUST OBFUSCATOR v4.0"
+git branch -M main
+git remote add origin https://github.com/&lt;user&gt;/&lt;repo&gt;.git
+git push -u origin main</pre>
+    <div class="deploy-note" style="margin-top:6px">あとは GitHub Settings → Pages から有効化するだけ</div>
+  </div>
+
+  <div style="margin-top:2px">
+    <button class="btn btn-p" id="dl-self">💾 index.html をダウンロード</button>
+  </div>
+</div>
+
+</main>
+
+<footer>
+  <span>RUST OBFUSCATOR v4.0 &copy; 2025</span>
+  <span>Runs entirely in your browser — no data sent to any server</span>
+</footer>
+
+</div><!-- /shell -->
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  ENGINE
+// ═══════════════════════════════════════════════════════════
+
+function toB64(s){try{return btoa(unescape(encodeURIComponent(s)))}catch{return btoa(s)}}
+function fromB64(s){try{return decodeURIComponent(escape(atob(s)))}catch{return atob(s)}}
+
+function xorEnc(s,k){k=k||"rust";const b=Array.from(s).map((c,i)=>c.charCodeAt(0)^k.charCodeAt(i%k.length));return btoa(b.map(x=>String.fromCharCode(x)).join(""))}
+function xorDec(s,k){k=k||"rust";try{const b=Array.from(atob(s)).map(c=>c.charCodeAt(0));return b.map((x,i)=>String.fromCharCode(x^k.charCodeAt(i%k.length))).join("")}catch{return"[XOR デコード失敗]"}}
+
+async function aesEnc(s,k){k=k||"rustkey";const km=await crypto.subtle.importKey("raw",await crypto.subtle.digest("SHA-256",new TextEncoder().encode(k)),{name:"AES-GCM"},false,["encrypt"]);const iv=crypto.getRandomValues(new Uint8Array(12));const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},km,new TextEncoder().encode(s));const o=new Uint8Array(12+ct.byteLength);o.set(iv);o.set(new Uint8Array(ct),12);return btoa(String.fromCharCode(...o))}
+async function aesDec(s,k){try{k=k||"rustkey";const km=await crypto.subtle.importKey("raw",await crypto.subtle.digest("SHA-256",new TextEncoder().encode(k)),{name:"AES-GCM"},false,["decrypt"]);const d=Uint8Array.from(atob(s),c=>c.charCodeAt(0));const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:d.slice(0,12)},km,d.slice(12));return new TextDecoder().decode(pt)}catch{return"[AES デコード失敗 — キーを確認]"}}
+
+async function sha256(s){const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("")}
+async function sha512(s){const h=await crypto.subtle.digest("SHA-512",new TextEncoder().encode(s));return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("")}
+
+function rotN(s,n){return s.replace(/[a-zA-Z]/g,c=>{const b=c<="Z"?65:97;return String.fromCharCode(((c.charCodeAt(0)-b+n)%26)+b)})}
+function rot47(s){return s.replace(/[!-~]/g,c=>String.fromCharCode(33+(c.charCodeAt(0)-33+47)%94))}
+function toHex(s){return Array.from(s).map(c=>c.charCodeAt(0).toString(16).padStart(2,"0")).join(" ")}
+function fromHex(s){return s.trim().split(/\s+/).map(h=>String.fromCharCode(parseInt(h,16))).join("")}
+function toBin(s){return Array.from(s).map(c=>c.charCodeAt(0).toString(2).padStart(8,"0")).join(" ")}
+function fromBin(s){return s.trim().split(/\s+/).map(b=>String.fromCharCode(parseInt(b,2))).join("")}
+function toOct(s){return Array.from(s).map(c=>c.charCodeAt(0).toString(8).padStart(3,"0")).join(" ")}
+function fromOct(s){return s.trim().split(/\s+/).map(o=>String.fromCharCode(parseInt(o,8))).join("")}
+function urlEnc(s){return encodeURIComponent(s)}
+function urlDec(s){try{return decodeURIComponent(s)}catch{return s}}
+function uniEsc(s){return Array.from(s).map(c=>"\\u"+c.charCodeAt(0).toString(16).padStart(4,"0")).join("")}
+function uniUnesc(s){return s.replace(/\\u([0-9a-fA-F]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16)))}
+function rev(s){return s.split("").reverse().join("")}
+function zwsEnc(s){return Array.from(s).map(c=>c+"\u200B").join("")}
+function zwsDec(s){return s.replace(/\u200B/g,"")}
+function morse(s){const M={a:".-",b:"-...",c:"-.-.",d:"-..",e:".",f:"..-.",g:"--.",h:"....",i:"..",j:".---",k:"-.-",l:".-..",m:"--",n:"-.",o:"---",p:".--.",q:"--.-",r:".-.",s:"...",t:"-",u:"..-",v:"...-",w:".--",x:"-..-",y:"-.--",z:"--..",0:"-----",1:".----",2:"..---",3:"...--",4:"....-",5:".....",6:"-....",7:"--...",8:"---..",9:"----."," ":"/"};return s.toLowerCase().split("").map(c=>M[c]||"?").join(" ")}
+
+async function applyMethod(id,text,key,mode){
+  switch(id){
+    case"base64": return mode==="encode"?toB64(text):fromB64(text);
+    case"xor":    return mode==="encode"?xorEnc(text,key):xorDec(text,key);
+    case"aes":    return mode==="encode"?await aesEnc(text,key):await aesDec(text,key);
+    case"sha256": return await sha256(text);
+    case"sha512": return await sha512(text);
+    case"hex":    return mode==="encode"?toHex(text):fromHex(text);
+    case"binary": return mode==="encode"?toBin(text):fromBin(text);
+    case"octal":  return mode==="encode"?toOct(text):fromOct(text);
+    case"rot13":  return rotN(text,13);
+    case"rot47":  return rot47(text);
+    case"url":    return mode==="encode"?urlEnc(text):urlDec(text);
+    case"unicode":return mode==="encode"?uniEsc(text):uniUnesc(text);
+    case"reverse":return rev(text);
+    case"zws":    return mode==="encode"?zwsEnc(text):zwsDec(text);
+    case"morse":  return morse(text);
+    default: return text;
+  }
+}
+
+function applyCustom(s,steps){
+  let r=s;
+  for(const st of steps){
+    try{
+      switch(st.op){
+        case"base64": r=toB64(r);break;
+        case"hex":    r=toHex(r);break;
+        case"reverse":r=rev(r);break;
+        case"rot":    r=rotN(r,parseInt(st.param)||13);break;
+        case"xor":    r=xorEnc(r,st.param||"key");break;
+        case"url":    r=urlEnc(r);break;
+        case"unicode":r=uniEsc(r);break;
+        case"upper":  r=r.toUpperCase();break;
+        case"lower":  r=r.toLowerCase();break;
+        case"insert": r=(st.param||"X")+r+(st.param||"X");break;
+        case"repeat": r=r.repeat(Math.min(parseInt(st.param)||2,5));break;
+        case"slice":  r=r.slice(0,parseInt(st.param)||20);break;
+      }
+    }catch{}
+  }
+  return r;
+}
+
+// ─── Method Registry ───
+const METHODS=[
+  {id:"base64", label:"Base64",  cat:"encode", str:1,rev:true, key:false},
+  {id:"xor",    label:"XOR",     cat:"cipher", str:3,rev:true, key:true },
+  {id:"aes",    label:"AES-GCM",cat:"cipher", str:5,rev:true, key:true },
+  {id:"sha256", label:"SHA-256",cat:"hash",   str:5,rev:false,key:false},
+  {id:"sha512", label:"SHA-512",cat:"hash",   str:5,rev:false,key:false},
+  {id:"hex",    label:"Hex",     cat:"encode", str:1,rev:true, key:false},
+  {id:"binary", label:"Binary",  cat:"encode", str:1,rev:true, key:false},
+  {id:"octal",  label:"Octal",   cat:"encode", str:1,rev:true, key:false},
+  {id:"rot13",  label:"ROT-13",  cat:"cipher", str:1,rev:true, key:false},
+  {id:"rot47",  label:"ROT-47",  cat:"cipher", str:1,rev:true, key:false},
+  {id:"url",    label:"URL Enc", cat:"encode", str:1,rev:true, key:false},
+  {id:"unicode",label:"Unicode", cat:"encode", str:2,rev:true, key:false},
+  {id:"reverse",label:"Reverse", cat:"misc",   str:1,rev:true, key:false},
+  {id:"zws",    label:"ZWS",     cat:"stealth",str:2,rev:true, key:false},
+  {id:"morse",  label:"Morse",   cat:"misc",   str:1,rev:false,key:false},
+];
+const CATS=["encode","cipher","hash","stealth","misc"];
+const CAT_LABELS={encode:"エンコード",cipher:"暗号",hash:"ハッシュ",stealth:"ステルス",misc:"その他"};
+
+const OPS=[
+  {op:"base64",label:"Base64",param:false},
+  {op:"hex",   label:"Hex",   param:false},
+  {op:"reverse",label:"Reverse",param:false},
+  {op:"rot",   label:"ROT-N", param:true, ph:"13"},
+  {op:"xor",   label:"XOR",   param:true, ph:"key"},
+  {op:"url",   label:"URL",   param:false},
+  {op:"unicode",label:"Unicode",param:false},
+  {op:"upper", label:"大文字",param:false},
+  {op:"lower", label:"小文字",param:false},
+  {op:"insert",label:"挿入",  param:true, ph:"PREFIX"},
+  {op:"repeat",label:"繰返",  param:true, ph:"2"},
+  {op:"slice", label:"切取",  param:true, ph:"20"},
+];
+
+// ─── Score ───
+function keyScore(k){if(!k)return 0;const l=Math.min(k.length/20,1)*.4,u=new Set(k).size/Math.max(k.length,1)*.4,b=(/[A-Z]/.test(k)?.05:0)+(/[0-9]/.test(k)?.1:0)+(/[^a-zA-Z0-9]/.test(k)?.15:0);return Math.min(1,l+u+b)}
+function calcScore(ids,key){if(!ids.length)return 0;const base=ids.reduce((a,id)=>a+(METHODS.find(m=>m.id===id)?.str||1),0),uniq=new Set(ids).size*.4,len=Math.min(ids.length*.4,2),kb=(ids.includes("xor")||ids.includes("aes"))?keyScore(key)*3:0;return Math.min(10,Math.round((base+uniq+len+kb)*10)/10)}
+function scoreInfo(s){if(s<2)return{label:"LOW",    color:"#555",   desc:"基本エンコードのみ"};if(s<4)return{label:"MEDIUM", color:"#D4920A",desc:"軽度の難読化"};if(s<6)return{label:"HIGH",   color:"#C93B24",desc:"中程度の難読化"};if(s<8)return{label:"STRONG", color:"#E84A30",desc:"強力な難読化"};return{label:"MAXIMUM",color:"#FF6B47",desc:"最大級の難読化"}}
+
+// ─── Code Generator ───
+function genCode(ids,key,mode,lang){
+  const steps=mode==="encode"?ids:[...ids].reverse();
+  if(lang==="js"){
+    const L=["// RUST OBFUSCATOR v4.0 — Generated Code","// JavaScript\n","function obfuscate(text) {"];
+    steps.forEach(id=>{switch(id){
+      case"base64": L.push('  text = btoa(unescape(encodeURIComponent(text)));');break;
+      case"hex":    L.push('  text = Array.from(text).map(c=>c.charCodeAt(0).toString(16).padStart(2,"0")).join(" ");');break;
+      case"reverse":L.push('  text = text.split("").reverse().join("");');break;
+      case"rot13":  L.push('  text = text.replace(/[a-zA-Z]/g,c=>{const b=c<="Z"?65:97;return String.fromCharCode(((c.charCodeAt(0)-b+13)%26)+b)});');break;
+      case"url":    L.push('  text = encodeURIComponent(text);');break;
+      case"unicode":L.push('  text = Array.from(text).map(c=>"\\\\u"+c.charCodeAt(0).toString(16).padStart(4,"0")).join("");');break;
+      case"xor":    L.push(`  const _k="${key||'rust'}";\n  text = btoa(Array.from(text).map((c,i)=>String.fromCharCode(c.charCodeAt(0)^_k.charCodeAt(i%_k.length))).join(""));`);break;
+      default:      L.push(`  // ${id}: 手動実装が必要`);
+    }});
+    L.push("  return text;","}","","// Usage:","const result = obfuscate(\"YOUR_TEXT\");","console.log(result);");
+    return L.join("\n");
+  }
+  if(lang==="python"){
+    const L=["# RUST OBFUSCATOR v4.0 — Generated Code","# Python 3\n","import base64","from urllib.parse import quote","import codecs\n","def obfuscate(text):"];
+    steps.forEach(id=>{switch(id){
+      case"base64": L.push('    text = base64.b64encode(text.encode()).decode()');break;
+      case"hex":    L.push('    text = text.encode().hex()');break;
+      case"reverse":L.push('    text = text[::-1]');break;
+      case"rot13":  L.push('    text = codecs.encode(text, "rot_13")');break;
+      case"url":    L.push('    text = quote(text, safe="")');break;
+      case"xor":    L.push(`    _k = "${key||'rust'}"\n    text = base64.b64encode(bytes(b^ord(_k[i%len(_k)]) for i,b in enumerate(text.encode()))).decode()`);break;
+      default:      L.push(`    # ${id}: 手動実装が必要`);
+    }});
+    L.push("    return text","","result = obfuscate(\"YOUR_TEXT\")","print(result)");
+    return L.join("\n");
+  }
+  if(lang==="rust"){
+    const L=["// RUST OBFUSCATOR v4.0 — Generated Code","// Rust\n","fn obfuscate(text: &str) -> String {","    let mut s = text.to_string();"];
+    steps.forEach(id=>{switch(id){
+      case"base64": L.push("    // use base64 crate\n    // s = base64::encode(&s);");break;
+      case"hex":    L.push('    s = s.bytes().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ");');break;
+      case"reverse":L.push('    s = s.chars().rev().collect();');break;
+      case"upper":  L.push('    s = s.to_uppercase();');break;
+      case"lower":  L.push('    s = s.to_lowercase();');break;
+      default:      L.push(`    // ${id}: 手動実装が必要`);
+    }});
+    L.push("    s","}","","fn main() {","    println!(\"{}\", obfuscate(\"YOUR_TEXT\"));","}");
+    return L.join("\n");
+  }
+  if(lang==="go"){
+    const L=["// RUST OBFUSCATOR v4.0 — Generated Code","// Go\n","package main\n","import (","    \"encoding/base64\"","    \"fmt\"","    \"strings\"",")\n","func obfuscate(text string) string {"];
+    steps.forEach(id=>{switch(id){
+      case"base64": L.push('    text = base64.StdEncoding.EncodeToString([]byte(text))');break;
+      case"hex":    L.push('    var sb strings.Builder\n    for _,b:=range[]byte(text){fmt.Fprintf(&sb,"%02x ",b)}\n    text=sb.String()');break;
+      case"reverse":L.push('    runes:=[]rune(text)\n    for i,j:=0,len(runes)-1;i<j;i,j=i+1,j-1{runes[i],runes[j]=runes[j],runes[i]}\n    text=string(runes)');break;
+      case"upper":  L.push('    text = strings.ToUpper(text)');break;
+      case"lower":  L.push('    text = strings.ToLower(text)');break;
+      default:      L.push(`    // ${id}: 手動実装が必要`);
+    }});
+    L.push("    return text","}","","func main() {","    fmt.Println(obfuscate(\"YOUR_TEXT\"))","}");
+    return L.join("\n");
+  }
+  return "// 言語を選択してください";
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let modeS="encode", modeC="encode";
+let selMethod="base64";
+let chainMethods=[];
+let customSteps=[];
+let historyList=[];
+let codeLang="js";
+
+// ═══════════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════════
+function $(id){return document.getElementById(id)}
+function showToast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),1600)}
+function copyText(s){navigator.clipboard.writeText(s).then(()=>showToast("COPIED !"))}
+
+function updateScore(ids,key,numId,lblId,barId,descId){
+  const s=calcScore(ids,key),si=scoreInfo(s);
+  const numEl=$(numId),lblEl=$(lblId),barEl=$(barId),descEl=$(descId);
+  if(!numEl)return;
+  numEl.textContent=s;numEl.style.color=si.color;
+  lblEl.textContent=si.label;lblEl.style.color=si.color;lblEl.style.borderColor=si.color;
+  barEl.style.width=s*10+"%";barEl.style.background=si.color;
+  descEl.textContent=si.desc;
+}
+
+function updateKeyBar(key,barId,hintId){
+  const s=keyScore(key),barEl=$(barId),hintEl=$(hintId);
+  if(!barEl)return;
+  const c=s<.3?"#555":s<.6?"#D4920A":"#27A85A";
+  const l=s<.3?"弱い":s<.6?"普通":"強い";
+  barEl.style.width=s*100+"%";barEl.style.background=c;
+  hintEl.style.color=c;hintEl.textContent=l+" — 長さ・文字種・記号で評価";
+}
+
+function setOutput(boxId,val,processing){
+  const el=$(boxId);
+  if(processing){el.className="out-box proc";el.textContent="処理中...";return}
+  if(!val){el.className="out-box empty";el.textContent="結果がここに表示されます...";return}
+  el.className="out-box";el.textContent=val;
+}
+
+function pushHistory(ids,mode,inp,out){
+  historyList.unshift({ids:[...ids],mode,input:inp.slice(0,60),output:out.slice(0,60),time:new Date().toLocaleTimeString("ja-JP")});
+  if(historyList.length>40)historyList.pop();
+  renderHistory();
+}
+
+function renderHistory(){
+  const list=$("hist-list"),count=$("hist-count");
+  count.textContent=historyList.length+" 件";
+  if(!historyList.length){list.innerHTML='<span class="empty-msg">変換を実行すると履歴が記録されます</span>';return}
+  list.innerHTML=historyList.map((h,i)=>`
+    <div class="hist-item" data-idx="${i}">
+      <div class="hist-meta">
+        <div class="hist-method">${h.ids.join(" → ")} [${h.mode}]</div>
+        <div class="hist-prev">${esc(h.input)} → ${esc(h.output)}</div>
+      </div>
+      <div class="hist-time">${h.time}</div>
+    </div>`).join("");
+  list.querySelectorAll(".hist-item").forEach(el=>{
+    el.addEventListener("click",()=>{
+      const h=historyList[+el.dataset.idx];
+      $("input-s").value=h.input;
+      switchTab("single");
+      $("input-s").dispatchEvent(new Event("input"));
+    });
+  });
+}
+
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+
+function downloadText(content,filename){
+  const b=new Blob([content],{type:"text/plain"});
+  const u=URL.createObjectURL(b),a=document.createElement("a");
+  a.href=u;a.download=filename;a.click();URL.revokeObjectURL(u);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BUILD METHOD GRIDS
+// ═══════════════════════════════════════════════════════════
+function buildMethodGrid(containerId, mode){
+  const el=$(containerId);
+  el.innerHTML="";
+  CATS.forEach(cat=>{
+    const ms=METHODS.filter(m=>m.cat===cat);
+    if(!ms.length)return;
+    const lbl=document.createElement("div");
+    lbl.className="cat-lbl";lbl.textContent=CAT_LABELS[cat];
+    el.appendChild(lbl);
+    const grid=document.createElement("div");
+    grid.className="mgrid";
+    ms.forEach(m=>{
+      const btn=document.createElement("button");
+      btn.className="mcard"+(m.rev===false?" oneway":"");
+      btn.dataset.id=m.id;
+      btn.title=m.rev===false?"一方向（デコード不可）":"";
+      btn.innerHTML=`<span>${m.label}</span><div class="sdots">${[1,2,3,4,5].map(i=>`<div class="sd${i<=m.str?" on":""}"></div>`).join("")}</div>`;
+      btn.addEventListener("click",()=>onMethodClick(m.id,containerId,mode));
+      grid.appendChild(btn);
+    });
+    el.appendChild(grid);
+  });
+}
+
+function onMethodClick(id, containerId, mode){
+  if(mode==="single"){
+    selMethod=id;
+    refreshSingleUI();
+  } else {
+    if(chainMethods.length>=10)return;
+    chainMethods.push(id);
+    refreshChainUI();
+  }
+}
+
+function refreshSingleUI(){
+  // highlight selected
+  document.querySelectorAll("#methods-single .mcard").forEach(b=>{
+    b.classList.toggle("sel",b.dataset.id===selMethod);
+  });
+  // key area
+  const m=METHODS.find(m=>m.id===selMethod);
+  $("key-area-s").style.display=m?.key?"block":"none";
+  // sha note
+  const isSha=selMethod==="sha256"||selMethod==="sha512";
+  $("sha-note-s").style.display=isSha?"block":"none";
+  // score
+  const key=$("key-s").value;
+  updateScore([selMethod],key,"snum-s","slbl-s","sbar-s","sdesc-s");
+  // run btn text
+  $("run-s").textContent=modeS==="encode"?"▶ エンコード":"◀ デコード";
+}
+
+function refreshChainUI(){
+  // highlight
+  document.querySelectorAll("#methods-chain .mcard").forEach(b=>{
+    b.classList.toggle("inchain",chainMethods.includes(b.dataset.id));
+  });
+  // chain count
+  $("chain-count").textContent=chainMethods.length+"/10";
+  // strip
+  const strip=$("chain-strip");
+  if(!chainMethods.length){strip.innerHTML='<span class="cmt-empty">↑ 手法をクリックして追加</span>';return;}
+  strip.innerHTML=chainMethods.map((id,i)=>{
+    const m=METHODS.find(m=>m.id===id);
+    return`${i>0?'<span class="carr">→</span>':''}<span class="cnode">${m?.label||id}<button class="crm" data-idx="${i}">✕</button></span>`;
+  }).join("");
+  strip.querySelectorAll(".crm").forEach(b=>b.addEventListener("click",e=>{
+    e.stopPropagation();chainMethods.splice(+b.dataset.idx,1);refreshChainUI();
+  }));
+  // key area
+  const needKey=chainMethods.some(id=>METHODS.find(m=>m.id===id)?.key);
+  $("key-area-c").style.display=needKey?"block":"none";
+  // score
+  const key=$("key-c").value;
+  updateScore(chainMethods,key,"snum-c","slbl-c","sbar-c","sdesc-c");
+  // run btn text
+  $("run-c").textContent=modeC==="encode"?"▶ エンコード":"◀ デコード";
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CUSTOM BUILDER
+// ═══════════════════════════════════════════════════════════
+function buildOpGrid(){
+  const grid=$("op-grid");
+  OPS.forEach(o=>{
+    const b=document.createElement("button");
+    b.className="op-btn";b.textContent=o.label;
+    b.addEventListener("click",()=>{customSteps.push({op:o.op,param:o.ph||""});renderCustomSteps();});
+    grid.appendChild(b);
+  });
+}
+
+function renderCustomSteps(){
+  $("cstep-count").textContent=customSteps.length+" steps";
+  const wrap=$("csteps-wrap");
+  if(!customSteps.length){wrap.innerHTML='<span class="empty-msg">↑ オペレーションを選択して追加</span>';return}
+  wrap.innerHTML=customSteps.map((s,i)=>{
+    const def=OPS.find(o=>o.op===s.op);
+    return`<div class="cstep">
+      <button class="cstep-mv" data-i="${i}" data-d="-1">↑</button>
+      <button class="cstep-mv" data-i="${i}" data-d="1">↓</button>
+      <span class="cstep-lbl">${i+1}. ${def?.label||s.op}</span>
+      ${def?.param?`<input class="cstep-in" data-i="${i}" value="${esc(s.param)}" placeholder="${def.ph||''}">`:``}
+      <button class="cstep-rm" data-i="${i}">✕</button>
+    </div>`;
+  }).join("");
+  wrap.querySelectorAll(".cstep-mv").forEach(b=>b.addEventListener("click",()=>{
+    const i=+b.dataset.i,d=+b.dataset.d,j=i+d;
+    if(j<0||j>=customSteps.length)return;
+    [customSteps[i],customSteps[j]]=[customSteps[j],customSteps[i]];renderCustomSteps();
+  }));
+  wrap.querySelectorAll(".cstep-in").forEach(inp=>inp.addEventListener("input",()=>{customSteps[+inp.dataset.i].param=inp.value}));
+  wrap.querySelectorAll(".cstep-rm").forEach(b=>b.addEventListener("click",()=>{customSteps.splice(+b.dataset.i,1);renderCustomSteps()}));
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILE I/O helper
+// ═══════════════════════════════════════════════════════════
+function setupFileIO(dropId,inputId,fnameId,targetTA){
+  const drop=$(dropId),inp=$(inputId),fn=$(fnameId);
+  drop.addEventListener("click",()=>inp.click());
+  drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("drag")});
+  drop.addEventListener("dragleave",()=>drop.classList.remove("drag"));
+  drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("drag");readFile(e.dataTransfer.files[0])});
+  inp.addEventListener("change",()=>readFile(inp.files[0]));
+  function readFile(f){if(!f)return;fn.textContent=f.name;const r=new FileReader();r.onload=e=>{$(targetTA).value=e.target.result;$(targetTA).dispatchEvent(new Event("input"))};r.readAsText(f,"UTF-8")}
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════════════
+function switchTab(id){
+  document.querySelectorAll(".ntab").forEach(b=>b.classList.toggle("on",b.dataset.tab===id));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.id==="panel-"+id));
+  if(id==="code")updateCodePanel();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CODE PANEL
+// ═══════════════════════════════════════════════════════════
+function updateCodePanel(){
+  const ids=chainMethods.length?chainMethods:[selMethod];
+  const key=$("key-s").value||$("key-c").value||"rust";
+  $("code-box").textContent=genCode(ids,key,modeS,codeLang);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded",()=>{
+
+  // build grids
+  buildMethodGrid("methods-single","single");
+  buildMethodGrid("methods-chain","chain");
+  buildOpGrid();
+
+  // tab nav
+  document.querySelectorAll(".ntab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
+
+  // ─ SINGLE MODE ─
+  ["enc-btn-s","dec-btn-s"].forEach(id=>$( id).addEventListener("click",()=>{
+    modeS=id.includes("enc")?"encode":"decode";
+    $("enc-btn-s").classList.toggle("mbtn-on",modeS==="encode");
+    $("dec-btn-s").classList.toggle("mbtn-on",modeS==="decode");
+    $("run-s").textContent=modeS==="encode"?"▶ エンコード":"◀ デコード";
+  }));
+
+  $("input-s").addEventListener("input",()=>{
+    $("cc-s").textContent=$("input-s").value.length+" chars";
+  });
+  $("key-s").addEventListener("input",()=>{
+    updateKeyBar($("key-s").value,"kbar-s","khint-s");
+    refreshSingleUI();
+  });
+
+  $("run-s").addEventListener("click",async()=>{
+    const txt=$("input-s").value;if(!txt.trim())return;
+    setOutput("out-s","",true);
+    $("out-actions-s").style.display="none";$("stats-s").style.display="none";$("save-s").style.display="none";
+    try{
+      const r=await applyMethod(selMethod,txt,$("key-s").value,modeS);
+      setOutput("out-s",r);
+      pushHistory([selMethod],modeS,txt,r);
+      const ratio=((r.length/txt.length)*100).toFixed(0);
+      $("stats-s").style.display="flex";
+      $("stats-s").innerHTML=`<span>入力: <span class="sv">${txt.length}</span>c</span><span>出力: <span class="sv">${r.length}</span>c</span><span>比率: <span class="sv">${ratio}%</span></span>`;
+      $("out-actions-s").style.display="flex";
+      $("save-s").style.display="block";
+      const isSha=selMethod==="sha256"||selMethod==="sha512";
+      if(isSha){$("swap-s").style.display="none"}else{$("swap-s").style.display=""}
+    }catch(e){setOutput("out-s","[エラー] "+e.message)}
+  });
+
+  $("clear-s").addEventListener("click",()=>{$("input-s").value="";$("cc-s").textContent="0 chars";setOutput("out-s","");$("out-actions-s").style.display="none";$("stats-s").style.display="none";$("fname-s").textContent="";$("save-s").style.display="none"});
+  $("copy-s").addEventListener("click",()=>copyText($("out-s").textContent));
+  $("swap-s").addEventListener("click",()=>{$("input-s").value=$("out-s").textContent;setOutput("out-s","");$("cc-s").textContent=$("input-s").value.length+" chars";$("out-actions-s").style.display="none";$("stats-s").style.display="none"});
+  $("save-s").addEventListener("click",()=>downloadText($("out-s").textContent,"obfuscated.txt"));
+
+  setupFileIO("fdrop-s","finput-s","fname-s","input-s");
+  refreshSingleUI();
+  updateKeyBar("rust","kbar-s","khint-s");
+
+  // ─ CHAIN MODE ─
+  ["enc-btn-c","dec-btn-c"].forEach(id=>$(id).addEventListener("click",()=>{
+    modeC=id.includes("enc")?"encode":"decode";
+    $("enc-btn-c").classList.toggle("mbtn-on",modeC==="encode");
+    $("dec-btn-c").classList.toggle("mbtn-on",modeC==="decode");
+    $("run-c").textContent=modeC==="encode"?"▶ エンコード":"◀ デコード";
+  }));
+
+  $("input-c").addEventListener("input",()=>{$("cc-c").textContent=$("input-c").value.length+" chars"});
+  $("key-c").addEventListener("input",()=>{updateKeyBar($("key-c").value,"kbar-c","khint-c");refreshChainUI()});
+
+  $("chain-clear").addEventListener("click",()=>{chainMethods=[];refreshChainUI()});
+
+  $("run-c").addEventListener("click",async()=>{
+    const txt=$("input-c").value;if(!txt.trim()||!chainMethods.length)return;
+    setOutput("out-c","",true);
+    $("out-actions-c").style.display="none";$("stats-c").style.display="none";$("save-c").style.display="none";
+    try{
+      const steps=modeC==="encode"?chainMethods:[...chainMethods].reverse();
+      let cur=txt;
+      for(const id of steps){
+        const m=METHODS.find(m=>m.id===id);
+        if(!m?.rev&&modeC==="decode"){cur="["+id+" は一方向 — デコード不可]";break}
+        cur=await applyMethod(id,cur,$("key-c").value,modeC);
+      }
+      setOutput("out-c",cur);
+      pushHistory(chainMethods,modeC,txt,cur);
+      const ratio=((cur.length/txt.length)*100).toFixed(0);
+      $("stats-c").style.display="flex";
+      $("stats-c").innerHTML=`<span>入力: <span class="sv">${txt.length}</span>c</span><span>出力: <span class="sv">${cur.length}</span>c</span><span>比率: <span class="sv">${ratio}%</span></span><span>ステップ: <span class="sv">${chainMethods.length}</span></span>`;
+      $("out-actions-c").style.display="flex";
+      $("save-c").style.display="block";
+    }catch(e){setOutput("out-c","[エラー] "+e.message)}
+  });
+
+  $("clear-c").addEventListener("click",()=>{$("input-c").value="";$("cc-c").textContent="0 chars";setOutput("out-c","");$("out-actions-c").style.display="none";$("stats-c").style.display="none";$("fname-c").textContent="";$("save-c").style.display="none"});
+  $("copy-c").addEventListener("click",()=>copyText($("out-c").textContent));
+  $("swap-c").addEventListener("click",()=>{$("input-c").value=$("out-c").textContent;setOutput("out-c","");$("cc-c").textContent=$("input-c").value.length+" chars";$("out-actions-c").style.display="none";$("stats-c").style.display="none"});
+  $("save-c").addEventListener("click",()=>downloadText($("out-c").textContent,"obfuscated.txt"));
+
+  setupFileIO("fdrop-c","finput-c","fname-c","input-c");
+  refreshChainUI();
+  updateKeyBar("rust","kbar-c","khint-c");
+
+  // ─ CUSTOM ─
+  $("input-u").addEventListener("input",()=>{$("cc-u").textContent=$("input-u").value.length+" chars"});
+  $("run-u").addEventListener("click",()=>{
+    const txt=$("input-u").value;if(!txt.trim()||!customSteps.length)return;
+    try{
+      const r=applyCustom(txt,customSteps);
+      setOutput("out-u",r);
+      pushHistory(customSteps.map(s=>s.op),"encode",txt,r);
+      const ratio=((r.length/txt.length)*100).toFixed(0);
+      $("stats-u").style.display="flex";
+      $("stats-u").innerHTML=`<span>入力: <span class="sv">${txt.length}</span>c</span><span>出力: <span class="sv">${r.length}</span>c</span><span>比率: <span class="sv">${ratio}%</span></span><span>ステップ: <span class="sv">${customSteps.length}</span></span>`;
+      $("out-actions-u").style.display="flex";
+      $("save-u").style.display="block";
+    }catch(e){setOutput("out-u","[エラー] "+e.message)}
+  });
+  $("clear-u").addEventListener("click",()=>{$("input-u").value="";$("cc-u").textContent="0 chars";setOutput("out-u","");$("out-actions-u").style.display="none";$("stats-u").style.display="none";$("fname-u").textContent="";$("save-u").style.display="none"});
+  $("copy-u").addEventListener("click",()=>copyText($("out-u").textContent));
+  $("save-u").addEventListener("click",()=>downloadText($("out-u").textContent,"obfuscated.txt"));
+  setupFileIO("fdrop-u","finput-u","fname-u","input-u");
+  renderCustomSteps();
+
+  // ─ CODE ─
+  document.querySelectorAll(".lang-btn").forEach(b=>b.addEventListener("click",()=>{
+    codeLang=b.dataset.lang;
+    document.querySelectorAll(".lang-btn").forEach(x=>x.classList.toggle("on",x===b));
+    updateCodePanel();
+  }));
+  $("copy-code").addEventListener("click",()=>copyText($("code-box").textContent));
+  $("dl-code").addEventListener("click",()=>downloadText($("code-box").textContent,"obfuscator-code.txt"));
+
+  // ─ HISTORY ─
+  $("hist-clear").addEventListener("click",()=>{historyList=[];renderHistory()});
+
+  // ─ DEPLOY ─
+  $("dl-self").addEventListener("click",()=>{
+    const src=document.documentElement.outerHTML;
+    downloadText("<!DOCTYPE html>\n"+src,"index.html");
+  });
+
+  // initial render
+  updateCodePanel();
+  renderHistory();
+});
+</script>
+</body>
+</html>
